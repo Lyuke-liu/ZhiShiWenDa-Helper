@@ -1,7 +1,9 @@
+# -*- coding:utf-8 -*-
 import requests, base64, json, os, time,config
 from PIL import Image
 from selenium import webdriver
 from selenium.webdriver.common.keys import Keys
+from aip import AipOcr
 
 driver = webdriver.Chrome(config.driver_location)
 # 访问百度
@@ -9,6 +11,26 @@ driver.get('http://www.baidu.com')
 
 count = 0
 screenpath = config.image_directory
+
+def get_words(image):
+  # 定义常量
+  APP_ID = 'xxxxxx'
+  API_KEY = 'xxxxxx'
+  SECRET_KEY = 'xxxxxx'
+  
+  # 初始化AipFace对象
+  aipOcr = AipOcr(APP_ID, API_KEY, SECRET_KEY)
+
+  # 定义参数变量
+  options = {
+    'detect_direction': 'true',
+    'language_type': 'CHN_ENG',
+    }
+
+  # 调用通用文字识别接口
+  result = aipOcr.basicGeneral(image, options)
+  return json.dumps(result,ensure_ascii=False)
+  
 while True:
   text = input('按下回车发起搜索')
 
@@ -29,31 +51,21 @@ while True:
 
   region = im.crop((config.left, config.top, w - config.right, config.bottom))  # 裁剪的区域
   region.save(region_path)
-
+  #选择图片
   f = open(region_path, 'rb')
-  ls_f = base64.b64encode(f.read())
+  image_byte = f.read()
   f.close()
-  image_byte = bytes.decode(ls_f)
+  
+  content = get_words(image_byte)
+    
+  json_data = json.loads(content)
 
-
-  url = 'http://text.aliapi.hanvon.com/rt/ws/v1/ocr/text/recg?code=74e51a88-41ec-413e-b162-bd031fe0407e'
-
-  data = {"uid": "118.12.0.12", "lang": "chns", "color": "color",
-          'image': image_byte}
-
-  headers = {"Content-Type": "application/json; charset=UTF-8",
-             "Accept-Content-Type": "application/octet-stream",
-             "Authorization": "APPCODE " + config.appcode
-             }
-  res = requests.post(url, data=json.dumps(data), headers=headers)
-  content = res.text
-  if res.status_code != 200:
-    print("orc识别错误")
-    break
-
-  json_data = json.loads(content)['textResult']
-  keyword = str(json_data).strip().rstrip().lstrip().replace("\r", "").replace("\n","").replace(" ","")
-  print("OCR识别内容: " + keyword)
+  # 输出文字
+  keyword = ""
+  for word in json_data["words_result"]:
+    keyword = keyword + str(word["words"])
+    
+  print("OCR识别内容: " + keyword.split('.')[1])
 
   driver.find_element_by_id('kw').send_keys(Keys.CONTROL, 'a')
   driver.find_element_by_id('kw').send_keys(Keys.BACK_SPACE)
